@@ -1,0 +1,143 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum JobStatus {
+  Processing
+  WaitingApproval
+  Approved
+  Rejected
+  ReadyToFill
+  Completed
+  Failed
+}
+
+enum ProposalStatus {
+  Pending
+  Approved
+  Rejected
+  Filled
+  Submitted
+}
+
+enum NotificationChannel {
+  TELEGRAM
+}
+
+enum NotificationStatus {
+  Pending
+  Sent
+  Failed
+}
+
+model User {
+  id                        String   @id @default(uuid())
+  email                     String   @unique
+  aiProvider                String?  @map("ai_provider")
+  encryptedAiApiKey         String?  @map("encrypted_ai_api_key")
+  encryptedTelegramBotToken String?  @map("encrypted_telegram_bot_token")
+  telegramChatId            String?  @map("telegram_chat_id")
+  sessionVersion            Int      @default(1) @map("session_version")
+  createdAt                 DateTime @default(now()) @map("created_at")
+  updatedAt                 DateTime @updatedAt @map("updated_at")
+
+  jobs Job[]
+
+  @@map("users")
+}
+
+model Job {
+  id            String    @id @default(uuid())
+  userId        String    @map("user_id")
+  platform      String
+  externalJobId String    @map("external_job_id")
+  fingerprint   String    @unique
+  title         String
+  description   String
+  budget        Json
+  skills        String[]
+  clientInfo    Json      @map("client_info")
+  status        JobStatus @default(Processing)
+  postedAt      DateTime  @map("posted_at")
+  isSubmitted   Boolean   @default(false) @map("is_submitted")
+  submittedAt   DateTime? @map("submitted_at")
+  createdAt     DateTime  @default(now()) @map("created_at")
+  updatedAt     DateTime  @updatedAt @map("updated_at")
+
+  user             User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  aiAnalysis       AiAnalysis?
+  proposals        Proposal[]
+  jobStatusHistory JobStatusHistory[]
+  notifications    Notification[]
+
+  @@index([userId])
+  @@index([platform, externalJobId])
+  @@map("jobs")
+}
+
+model AiAnalysis {
+  id                String   @id @default(uuid())
+  jobId             String   @unique @map("job_id")
+  summary           String
+  requiredSkills    String[] @map("required_skills")
+  suggestedProposal String   @map("suggested_proposal")
+  suggestedBudget   Json     @map("suggested_budget")
+  suggestedTimeline String?  @map("suggested_timeline")
+  questions         Json?
+  portfolioLink     String?  @map("portfolio_recommendation")
+  providerUsed      String   @map("provider_used")
+  model             String?
+  createdAt         DateTime @default(now()) @map("created_at")
+
+  job Job @relation(fields: [jobId], references: [id], onDelete: Cascade)
+
+  @@map("ai_analysis")
+}
+
+model Proposal {
+  id        String         @id @default(uuid())
+  jobId     String         @unique @map("job_id")
+  content   String
+  status    ProposalStatus @default(Pending)
+  createdAt DateTime       @default(now()) @map("created_at")
+  updatedAt DateTime       @updatedAt @map("updated_at")
+
+  job Job @relation(fields: [jobId], references: [id], onDelete: Cascade)
+
+  @@map("proposals")
+}
+
+model JobStatusHistory {
+  id         String   @id @default(uuid())
+  jobId      String   @map("job_id")
+  fromStatus String   @map("from_status")
+  toStatus   String   @map("to_status")
+  actor      String
+  changedAt  DateTime @default(now()) @map("changed_at")
+
+  job Job @relation(fields: [jobId], references: [id], onDelete: Cascade)
+
+  @@map("job_status_history")
+}
+
+model Notification {
+  id         String              @id @default(uuid())
+  jobId      String              @map("job_id")
+  channel    NotificationChannel
+  status     NotificationStatus  @default(Pending)
+  messageId  String?             @map("message_id")
+  retryCount Int                 @default(0) @map("retry_count")
+  error      String?
+  sentAt     DateTime?           @map("sent_at")
+  createdAt  DateTime            @default(now()) @map("created_at")
+
+  job Job @relation(fields: [jobId], references: [id], onDelete: Cascade)
+
+  @@index([status])
+  @@index([channel])
+  @@map("notifications")
+}
