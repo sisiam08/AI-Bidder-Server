@@ -10,7 +10,7 @@ import { NotificationsModule } from './notifications/notifications.module';
 import { ApprovalModule } from './approval/approval.module';
 import { WebsocketModule } from './websocket/websocket.module';
 import { WebhooksModule } from './webhooks/webhooks.module';
-import { HealthController } from './health.controller';
+import { AppController } from './app.controller';
 
 @Module({
   imports: [
@@ -26,6 +26,6 @@ import { HealthController } from './health.controller';
     WebsocketModule,
     WebhooksModule,
   ],
-  controllers: [HealthController],
+  controllers: [AppController],
 })
 export class AppModule {}

@@ -3,7 +3,7 @@ import type { Response } from 'express';
 import { PrismaService } from './prisma/prisma.service';
 
 @Controller('v1/health')
-export class HealthController {
+export class AppController {
   constructor(private prisma: PrismaService) {}
 
   @Get()
