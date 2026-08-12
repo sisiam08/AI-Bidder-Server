@@ -1,98 +1,152 @@
-<p align="center">
-  <a href="http://nestjs.com/" target="blank"><img src="https://nestjs.com/img/logo-small.svg" width="120" alt="Nest Logo" /></a>
-</p>
+# AI Bidder — Server
 
-[circleci-image]: https://img.shields.io/circleci/build/github/nestjs/nest/master?token=abc123def456
-[circleci-url]: https://circleci.com/gh/nestjs/nest
+Backend service for the AI Bidder browser extension. It ingests jobs submitted by the extension, scores them using an AI provider (OpenRouter or Ollama), and manages an end-to-end approval workflow over Telegram: you review a job, tune the suggested budget and timeline with inline keyboard steppers, then approve — the extension opens the job page and auto-fills the proposal.
 
-  <p align="center">A progressive <a href="http://nodejs.org" target="_blank">Node.js</a> framework for building efficient and scalable server-side applications.</p>
-    <p align="center">
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/v/@nestjs/core.svg" alt="NPM Version" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/l/@nestjs/core.svg" alt="Package License" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/dm/@nestjs/common.svg" alt="NPM Downloads" /></a>
-<a href="https://circleci.com/gh/nestjs/nest" target="_blank"><img src="https://img.shields.io/circleci/build/github/nestjs/nest/master" alt="CircleCI" /></a>
-<a href="https://discord.gg/G7Qnnhy" target="_blank"><img src="https://img.shields.io/badge/discord-online-brightgreen.svg" alt="Discord"/></a>
-<a href="https://opencollective.com/nest#backer" target="_blank"><img src="https://opencollective.com/nest/backers/badge.svg" alt="Backers on Open Collective" /></a>
-<a href="https://opencollective.com/nest#sponsor" target="_blank"><img src="https://opencollective.com/nest/sponsors/badge.svg" alt="Sponsors on Open Collective" /></a>
-  <a href="https://paypal.me/kamilmysliwiec" target="_blank"><img src="https://img.shields.io/badge/Donate-PayPal-ff3f59.svg" alt="Donate us"/></a>
-    <a href="https://opencollective.com/nest#sponsor"  target="_blank"><img src="https://img.shields.io/badge/Support%20us-Open%20Collective-41B883.svg" alt="Support us"></a>
-  <a href="https://twitter.com/nestframework" target="_blank"><img src="https://img.shields.io/twitter/follow/nestframework.svg?style=social&label=Follow" alt="Follow us on Twitter"></a>
-</p>
-  <!--[![Backers on Open Collective](https://opencollective.com/nest/backers/badge.svg)](https://opencollective.com/nest#backer)
-  [![Sponsors on Open Collective](https://opencollective.com/nest/sponsors/badge.svg)](https://opencollective.com/nest#sponsor)-->
+## Features
 
-## Description
+- **Job pipeline** — receive jobs, enrich and store them, expose CRUD + submission endpoints.
+- **AI analysis** — generate job summaries, budgets and timeline suggestions via OpenRouter (cloud) or a local Ollama model.
+- **Telegram approval flow** — inline keyboards with budget / timeline steppers, `Done` and `Approve` / `Reject` actions, delivered via long polling (`getUpdates`) — no webhook or public URL required.
+- **WebSocket events** — real-time `job.approved`, `job.rejected`, etc., so the extension reacts immediately.
+- **Per-user credentials** — Telegram bot tokens and chat IDs are stored encrypted in the database using a master key.
+- **Encrypted storage** — AES-GCM encryption of sensitive fields via a 32-byte master key from the environment.
 
-[Nest](https://github.com/nestjs/nest) framework TypeScript starter repository.
+## Tech Stack
 
-## Project setup
+- [NestJS 11](https://nestjs.com/) + Express
+- [Prisma ORM 7](https://www.prisma.io/) with `@prisma/adapter-pg`
+- PostgreSQL
+- Socket.IO (`@nestjs/platform-socket.io`)
+- `cookie-parser`, class-validator / class-transformer, `@nestjs/throttler`
 
-```bash
-$ npm install
-```
+## Prerequisites
 
-## Compile and run the project
+- [Node.js](https://nodejs.org/) >= 20
+- A PostgreSQL database
+- (Optional) An [OpenRouter](https://openrouter.ai/) API key, or Ollama running locally
+
+## Getting Started
 
 ```bash
-# development
-$ npm run start
+# 1. Install dependencies
+npm install
 
-# watch mode
-$ npm run start:dev
+# 2. Configure the environment
+cp .env.example .env
+#   - set DATABASE_URL, PORT, ENCRYPTION_KEY (see below)
 
-# production mode
-$ npm run start:prod
+# 3. Apply the database schema
+npx prisma migrate deploy   # after a schema change, run `npx prisma migrate dev`
+
+# 4. Start the server (watch mode)
+npm run start:dev
 ```
 
-## Run tests
+The server listens on `http://localhost:5000` by default. Health check:
 
-```bash
-# unit tests
-$ npm run test
-
-# e2e tests
-$ npm run test:e2e
-
-# test coverage
-$ npm run test:cov
+```
+GET http://localhost:5000/api/v1/health
 ```
 
-## Deployment
+### Environment Variables
 
-When you're ready to deploy your NestJS application to production, there are some key steps you can take to ensure it runs as efficiently as possible. Check out the [deployment documentation](https://docs.nestjs.com/deployment) for more information.
+| Variable        | Required | Description                                                                 |
+| --------------- | :------: | --------------------------------------------------------------------------- |
+| `DATABASE_URL`  |   Yes    | PostgreSQL connection string, e.g. `postgresql://user:pass@host:5432/db?sslmode=require` |
+| `PORT`          |    No    | HTTP / WS port (default `5000`)                                              |
+| `ENCRYPTION_KEY`|   Yes    | Master key for encrypting stored credentials. 32-byte hex string (64 hex chars). Generate one with `openssl rand -hex 32`. |
 
-If you are looking for a cloud-based platform to deploy your NestJS application, check out [Mau](https://mau.nestjs.com), our official platform for deploying NestJS applications on AWS. Mau makes deployment straightforward and fast, requiring just a few simple steps:
+Telegram bot tokens and chat IDs are **not** stored in `.env` — they are supplied per user through the extension and stored encrypted in the database.
 
-```bash
-$ npm install -g @nestjs/mau
-$ mau deploy
+## Available Scripts
+
+| Script                 | Description                                       |
+| ---------------------- | ------------------------------------------------- |
+| `npm run start:dev`    | Run in watch mode (`nest start --watch`)          |
+| `npm run build`        | Clean `dist` and compile                           |
+| `npm run start`        | Build, then run in production                      |
+| `npm run start:prod`   | Run a previously built `dist`                      |
+| `npm run generate`     | `prisma generate`                                  |
+| `npm run lint`         | ESLint with `--fix`                                |
+| `npm run format`       | Prettier over `src` and `test`                     |
+| `npm test`             | Run unit tests (Jest)                              |
+
+## REST API
+
+All routes are prefixed with `/api`. Sessions are tracked via an auth cookie; the extension calls `setup` to create/restore a user session.
+
+### Auth
+
+| Method | Route                 | Description                              |
+| ------ | --------------------- | ---------------------------------------- |
+| POST   | `/api/v1/auth/setup`  | Create or restore a user session (returns auth cookie) |
+| POST   | `/api/v1/auth/logout` | Destroy the current session              |
+
+### Jobs
+
+| Method | Route                          | Description                                        |
+| ------ | ------------------------------ | -------------------------------------------------- |
+| POST   | `/api/v1/jobs`                 | Create a job from the extension                    |
+| GET    | `/api/v1/jobs`                 | List jobs                                          |
+| GET    | `/api/v1/jobs/:id`             | Get a single job                                   |
+| GET    | `/api/v1/jobs/:id/proposal`    | Get the AI-generated proposal                      |
+| POST   | `/api/v1/jobs/:id/submit`      | Mark a job submitted                               |
+| POST   | `/api/v1/jobs/:id/proposal/fill`| Record that the proposal was filled                |
+| POST   | `/api/v1/jobs/:id/bid-blocked` | Flag a job as unable to bid                        |
+
+### Approval
+
+| Method | Route                     | Description                              |
+| ------ | ------------------------- | ---------------------------------------- |
+| POST   | `/api/v1/jobs/:id/approve`| Approve a job — emit approval + notify the extension |
+| POST   | `/api/v1/jobs/:id/reject` | Reject a job                             |
+
+### Webhooks
+
+| Method | Route                       | Description                                   |
+| ------ | --------------------------- | --------------------------------------------- |
+| POST   | `/api/v1/webhooks/telegram` | Telegram callback endpoint (used internally by the polling flow) |
+
+## Telegram Integration
+
+The server polls Telegram's `getUpdates` API for each configured bot token instead of relying on a public webhook, so it works behind NAT without exposing a URL.
+
+The interaction flow:
+
+1. When a job is analyzed, a **job notification** (summary, suggested budget, suggested timeline) is sent with a keyboard offering steppers.
+2. **Budget / Timeline steppers** — `+` / `−` buttons adjust the values before approval.
+3. **Done** — persists the adjusted values and returns to the main keyboard (does not auto-approve).
+4. **Approve / Reject** — final decision; the button updates to a disabled "handled" state and `job.approved` / `job.rejected` is broadcast over WebSocket so the extension opens the job page and fills the proposal.
+
+## WebSocket Events
+
+Connect to `ws://localhost:5000/api/v1/ws` (socket.io, auth via session cookie) and listen for job lifecycle events:
+
+- `job.approved`
+- `job.rejected`
+- `job.bidBlocked`
+
+Events are emitted with the job id so the client can target the correct page.
+
+## Project Structure
+
+```
+src/
+├── ai/                 # Analysis providers (OpenRouter, Ollama) and scoring
+├── approval/           # Approve / reject job flow
+├── auth/               # User session setup and guard
+├── common/             # Shared DTOs, enums, interfaces
+├── crypto/             # AES-GCM encryption for stored credentials
+├── health/             # /v1/health controller
+├── jobs/               # Job CRUD, submissions, proposal filling
+├── notifications/      # Notification provider interfaces + Telegram provider
+├── pipeline/           # Job processing pipeline + startup bootstrap
+├── prisma/             # PrismaService (official @prisma/client)
+├── webhooks/           # Telegram controllers + long-polling service
+├── websocket/          # Socket.IO gateway emitting job events
+└── app.module.ts       # Root module
 ```
 
-With Mau, you can deploy your application in just a few clicks, allowing you to focus on building features rather than managing infrastructure.
+## Related
 
-## Resources
-
-Check out a few resources that may come in handy when working with NestJS:
-
-- Visit the [NestJS Documentation](https://docs.nestjs.com) to learn more about the framework.
-- For questions and support, please visit our [Discord channel](https://discord.gg/G7Qnnhy).
-- To dive deeper and get more hands-on experience, check out our official video [courses](https://courses.nestjs.com/).
-- Deploy your application to AWS with the help of [NestJS Mau](https://mau.nestjs.com) in just a few clicks.
-- Visualize your application graph and interact with the NestJS application in real-time using [NestJS Devtools](https://devtools.nestjs.com).
-- Need help with your project (part-time to full-time)? Check out our official [enterprise support](https://enterprise.nestjs.com).
-- To stay in the loop and get updates, follow us on [X](https://x.com/nestframework) and [LinkedIn](https://linkedin.com/company/nestjs).
-- Looking for a job, or have a job to offer? Check out our official [Jobs board](https://jobs.nestjs.com).
-
-## Support
-
-Nest is an MIT-licensed open source project. It can grow thanks to the sponsors and support by the amazing backers. If you'd like to join them, please [read more here](https://docs.nestjs.com/support).
-
-## Stay in touch
-
-- Author - [Kamil Myśliwiec](https://twitter.com/kammysliwiec)
-- Website - [https://nestjs.com](https://nestjs.com/)
-- Twitter - [@nestframework](https://twitter.com/nestframework)
-
-## License
-
-Nest is [MIT licensed](https://github.com/nestjs/nest/blob/master/LICENSE).
+- Client extension: [AI-Bidder-Client](https://github.com/sisiam08/AI-Bidder-Client)
