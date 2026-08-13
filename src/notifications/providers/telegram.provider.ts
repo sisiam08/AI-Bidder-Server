@@ -158,10 +158,13 @@ export class TelegramProvider implements NotificationProvider {
     }
 
     const message = [
-      `Bid Blocked — ${payload.platform}`,
-      `Title: ${payload.title}`,
+      `🚫 Bid Blocked — ${this.escapeHtml(payload.platform)}`,
+      `Title: <b>${this.escapeHtml(payload.title)}</b>`,
       '',
-      `Reasons: ${payload.reasons.join('; ')}`,
+      '<b>Restrictions:</b>',
+      ...payload.reasons.map(
+        (reason) => `• ${this.escapeHtml(reason)}`,
+      ),
     ]
       .filter((line): line is string => line !== null)
       .join('\n');
@@ -392,6 +395,15 @@ export class TelegramProvider implements NotificationProvider {
   private formatAmount(amount: number, currency?: string): string {
     const symbol = CURRENCY_SYMBOLS[currency?.toUpperCase() ?? ''];
     return symbol ? `${symbol}${amount}` : `${amount} ${currency ?? ''}`.trim();
+  }
+
+  private escapeHtml(value: string): string {
+    return value
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;');
   }
 
   private timelineToDays(timeline: string): number | null {
