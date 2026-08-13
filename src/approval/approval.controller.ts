@@ -6,7 +6,7 @@ interface ApprovalRequest {
   user?: { userId: string };
 }
 
-@Controller('v1/jobs')
+@Controller('jobs')
 @UseGuards(AuthGuard)
 export class ApprovalController {
   constructor(private approvalService: ApprovalService) {}

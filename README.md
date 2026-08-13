@@ -73,7 +73,7 @@ Telegram bot tokens and chat IDs are **not** stored in `.env` — they are suppl
 
 ## REST API
 
-All routes are prefixed with `/api`. Sessions are tracked via an auth cookie; the extension calls `setup` to create/restore a user session.
+All routes are prefixed with `/api/v1`. Sessions are tracked via an auth cookie; the extension calls `setup` to create/restore a user session.
 
 ### Auth
 

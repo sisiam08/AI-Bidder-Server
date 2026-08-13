@@ -4,7 +4,7 @@ import { TelegramCallbackService } from './telegram-callback.service';
 
 const TELEGRAM_SECRET_HEADER = 'x-telegram-bot-api-secret-token';
 
-@Controller('v1/webhooks')
+@Controller('webhooks')
 export class WebhooksController {
   private readonly logger = new Logger(WebhooksController.name);
 

@@ -8,7 +8,7 @@ import {
 } from './session.service';
 import { SetupUserDto } from '../common/dto/setup-user.dto';
 
-@Controller('v1/auth')
+@Controller('auth')
 export class AuthController {
   constructor(
     private authService: AuthService,

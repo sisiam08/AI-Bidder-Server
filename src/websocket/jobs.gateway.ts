@@ -22,7 +22,7 @@ function parseCookies(header?: string): Record<string, string> {
 }
 
 @WebSocketGateway({
-  namespace: '/v1/ws',
+  namespace: '/api/v1/ws',
   cors: { origin: true, credentials: true },
 })
 export class JobsGateway implements OnGatewayConnection, OnGatewayDisconnect {

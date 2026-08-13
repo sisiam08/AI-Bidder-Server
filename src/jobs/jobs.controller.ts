@@ -14,7 +14,7 @@ import { JobsService } from './jobs.service';
 import { CreateJobDto } from '../common/dto/create-job.dto';
 import { BidBlockedDto } from '../common/dto/bid-blocked.dto';
 
-@Controller('v1/jobs')
+@Controller('jobs')
 @UseGuards(AuthGuard)
 export class JobsController {
   constructor(private jobsService: JobsService) {}

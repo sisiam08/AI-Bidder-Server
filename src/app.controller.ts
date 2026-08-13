@@ -2,7 +2,7 @@ import { Controller, Get, Res } from '@nestjs/common';
 import type { Response } from 'express';
 import { PrismaService } from './prisma/prisma.service';
 
-@Controller('v1/health')
+@Controller('health')
 export class AppController {
   constructor(private prisma: PrismaService) {}
 
