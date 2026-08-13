@@ -32,19 +32,32 @@ export class OllamaProvider implements AiProvider {
   }
 
   private async generate(prompt: string): Promise<string> {
-    const response = await fetch(`${this.endpoint}/api/generate`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        model: this.model,
-        prompt,
-        stream: false,
-        format: 'json',
-      }),
-    });
+    let response: Response;
+    try {
+      response = await fetch(`${this.endpoint}/api/generate`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          model: this.model,
+          prompt,
+          stream: false,
+          format: 'json',
+        }),
+      });
+    } catch (error) {
+      const detail = error instanceof Error ? error.message : String(error);
+      throw new Error(
+        `AI provider (Ollama) is unreachable at ${this.endpoint} (${detail}). Install and start Ollama, then make sure the model "${this.model}" is pulled.`,
+      );
+    }
 
     if (!response.ok) {
-      throw new Error(`Ollama API error: ${response.statusText}`);
+      const body = await response.text().catch(() => '');
+      throw new Error(
+        `AI provider (Ollama) error ${response.status}: ${response.statusText}${
+          body ? ` — ${body.slice(0, 300)}` : ''
+        }`,
+      );
     }
 
     const raw = (await response.json()) as { response?: string };

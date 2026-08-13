@@ -35,7 +35,7 @@ export class JobPipelineService
   ) {}
 
   async onApplicationBootstrap() {
-    await this.resumeInterruptedJobs().catch((error) => {
+    void this.resumeInterruptedJobs().catch((error) => {
       this.logger.warn(
         `Failed to resume interrupted jobs: ${(error as Error).message}`,
       );
@@ -48,7 +48,7 @@ export class JobPipelineService
 
   async resumeInterruptedJobs(): Promise<number> {
     const interrupted = await this.prisma.job.findMany({
-      where: { status: { in: [JobStatus.Processing, JobStatus.Failed] } },
+      where: { status: JobStatus.Processing },
     });
 
     for (const job of interrupted) {
