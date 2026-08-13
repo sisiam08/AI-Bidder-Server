@@ -7,6 +7,7 @@ import {
   JobAnalysisOutput,
   ProviderCredentials,
 } from '../common/interfaces/job.interface';
+import { clampSuggestedBudget } from './common';
 
 interface AiContext {
   providerName: string;
@@ -26,9 +27,10 @@ export class AiService {
     userId: string,
   ): Promise<JobAnalysisOutput> {
     const ctx = await this.buildContext(userId);
-    return this.providerRouter
+    const output = await this.providerRouter
       .getProvider(ctx.providerName)
       .analyze(input, ctx.credentials);
+    return clampSuggestedBudget(output, input.budget);
   }
 
   async getProviderMeta(userId: string): Promise<{

@@ -191,6 +191,7 @@ export class JobPipelineService
       title: job.title,
       jobUrl: buildJobUrl(job.platform, job.externalJobId),
       budget: job.budget as JobNotification['budget'],
+      clientTimeline: this.clientTimeline(job.clientInfo),
       aiSummary: job.aiAnalysis.summary,
       skills: job.skills,
       suggestedProposal: job.aiAnalysis.suggestedProposal,
@@ -266,6 +267,14 @@ export class JobPipelineService
         actor,
       },
     });
+  }
+
+  private clientTimeline(clientInfo: unknown): string | undefined {
+    if (!clientInfo || typeof clientInfo !== 'object') return undefined;
+    const timeline = (clientInfo as Record<string, unknown>).timeline;
+    return typeof timeline === 'string' && timeline.trim()
+      ? timeline.trim()
+      : undefined;
   }
 
   private delay(ms: number): Promise<void> {

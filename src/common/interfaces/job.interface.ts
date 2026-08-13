@@ -50,6 +50,7 @@ export interface JobNotification {
     max?: number;
     currency?: string;
   };
+  clientTimeline?: string;
   aiSummary: string;
   skills: string[];
   suggestedProposal: string;

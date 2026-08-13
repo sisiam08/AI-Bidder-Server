@@ -307,14 +307,30 @@ export class TelegramCallbackService {
     }
 
     const payload = await this.loadNotification(jobId);
-    const label =
-      outcome === 'approve' ? await this.buildApprovedLabel(jobId) : undefined;
 
     const originalKeyboard: object[][] = payload?.jobUrl
       ? [[{ text: 'View Job', url: payload.jobUrl }]]
       : [];
-    const statusLabel =
-      outcome === 'approve' ? `✅ ${label ?? 'Approved'}` : 'Rejected';
+
+    let statusLabel: string;
+    let messageText: string | undefined;
+    let answerText: string;
+
+    if (outcome === 'approve') {
+      statusLabel = '⏳ Processing…';
+      answerText =
+        '⏳ Checking the job… the button will update once it is confirmed.';
+      messageText = payload
+        ? `${this.telegramProvider.buildMessage(payload)}\n\n⏳ Checking the job…`
+        : undefined;
+    } else {
+      statusLabel = 'Rejected';
+      answerText = 'Job rejected';
+      messageText = payload
+        ? `${this.telegramProvider.buildMessage(payload)}\n\n❌ Rejected`
+        : undefined;
+    }
+
     const newKeyboard = this.telegramProvider.buildStatusKeyboard(
       originalKeyboard,
       outcome,
@@ -322,31 +338,15 @@ export class TelegramCallbackService {
       statusLabel,
     );
 
-    const messageText = payload
-      ? `${this.telegramProvider.buildMessage(payload)}\n\n${
-          outcome === 'approve' ? '✅ Approved' : '❌ Rejected'
-        }`
-      : undefined;
-
     await this.telegramProvider
-      .editMessageText(
-        botToken,
-        chatId,
-        messageId,
-        messageText ?? '',
-        newKeyboard,
-      )
+      .editMessageText(botToken, chatId, messageId, messageText ?? '', newKeyboard)
       .catch((error) => {
         this.logger.warn(
           `editMessageText after finalize failed: ${(error as Error).message}`,
         );
       });
 
-    await this.answer(
-      botToken,
-      callbackId,
-      outcome === 'approve' ? '✅ Job approved' : 'Job rejected',
-    );
+    await this.answer(botToken, callbackId, answerText);
 
     return { ok: true };
   }
@@ -399,6 +399,7 @@ export class TelegramCallbackService {
       title: job.title,
       jobUrl: buildJobUrl(job.platform, job.externalJobId),
       budget: job.budget as JobNotification['budget'],
+      clientTimeline: this.clientTimeline(job.clientInfo),
       aiSummary: job.aiAnalysis.summary,
       skills: job.skills,
       suggestedProposal: job.aiAnalysis.suggestedProposal,
@@ -408,32 +409,12 @@ export class TelegramCallbackService {
     };
   }
 
-  private async buildApprovedLabel(jobId: string): Promise<string | undefined> {
-    const job = await this.prisma.job.findUnique({
-      where: { id: jobId },
-      include: { aiAnalysis: true },
-    });
-    if (!job?.aiAnalysis) return undefined;
-
-    const parts: string[] = [];
-
-    const budget = job.aiAnalysis.suggestedBudget as {
-      amount?: number;
-      currency?: string;
-    } | null;
-    if (budget?.amount !== undefined && budget.amount !== null) {
-      const symbol =
-        CURRENCY_SYMBOLS[budget.currency?.toUpperCase() ?? ''] ?? '';
-      parts.push(`${symbol}${budget.amount}`);
-    }
-
-    const timeline = job.aiAnalysis.suggestedTimeline;
-    if (timeline) {
-      const days = this.timelineToDays(timeline);
-      if (days !== null) parts.push(`${days} Days`);
-    }
-
-    return parts.length > 0 ? `Approved (${parts.join(', ')})` : 'Approved';
+  private clientTimeline(clientInfo: unknown): string | undefined {
+    if (!clientInfo || typeof clientInfo !== 'object') return undefined;
+    const timeline = (clientInfo as Record<string, unknown>).timeline;
+    return typeof timeline === 'string' && timeline.trim()
+      ? timeline.trim()
+      : undefined;
   }
 
   private timelineToDays(timeline: string): number | null {

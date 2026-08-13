@@ -12,6 +12,7 @@ import { JobsGateway } from '../websocket/jobs.gateway';
 import { NotificationsService } from '../notifications/notifications.service';
 import { JobStatus } from '../common/enums/job-status.enum';
 import { BlockedBidNotification } from '../common/interfaces/job.interface';
+import { ApprovalService } from '../approval/approval.service';
 
 @Injectable()
 export class JobsService {
@@ -22,6 +23,7 @@ export class JobsService {
     private pipeline: JobPipelineService,
     private jobsGateway: JobsGateway,
     private notificationsService: NotificationsService,
+    private approvalService: ApprovalService,
   ) {}
 
   computeFingerprint(platform: string, externalJobId: string): string {
@@ -179,6 +181,16 @@ export class JobsService {
       });
     }
 
+    await this.notificationsService
+      .confirmApproved(userId, jobId)
+      .catch((error) => {
+        this.logger.warn(
+          `Confirming approved status for job ${jobId} failed: ${
+            (error as Error).message
+          }`,
+        );
+      });
+
     return { jobId, status: job.status };
   }
 
@@ -198,17 +210,25 @@ export class JobsService {
       reasons,
     };
 
-    const receipt = await this.notificationsService.sendBidBlocked(
-      userId,
-      payload,
-    );
-    if (!receipt.success) {
-      this.logger.warn(
-        `Bid-blocked notification for job ${jobId} failed: ${receipt.error}`,
-      );
-    }
+    await this.notificationsService
+      .markBidBlocked(userId, payload)
+      .catch((error) => {
+        this.logger.warn(
+          `Rewriting Telegram status for blocked job ${jobId} failed: ${
+            (error as Error).message
+          }`,
+        );
+      });
 
-    return { jobId, delivered: receipt.success };
+    await this.approvalService.reject(jobId, 'system').catch((error) => {
+      this.logger.warn(
+        `Marking blocked job ${jobId} as rejected failed: ${
+          (error as Error).message
+        }`,
+      );
+    });
+
+    return { jobId, ok: true };
   }
 
   private buildJobUrl(platform: string, externalJobId: string): string {

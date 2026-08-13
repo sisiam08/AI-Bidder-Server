@@ -59,6 +59,10 @@ class ClientInfoDto {
   @IsOptional()
   @IsString()
   proposals?: string;
+
+  @IsOptional()
+  @IsString()
+  timeline?: string;
 }
 
 export class CreateJobDto {

@@ -18,7 +18,7 @@ export class ApprovalService {
     [JobStatus.Processing]: [],
     [JobStatus.WaitingApproval]: [JobStatus.Approved, JobStatus.Rejected],
     [JobStatus.Approved]: [JobStatus.ReadyToFill],
-    [JobStatus.ReadyToFill]: [JobStatus.Completed],
+    [JobStatus.ReadyToFill]: [JobStatus.Completed, JobStatus.Rejected],
     [JobStatus.Completed]: [],
     [JobStatus.Rejected]: [],
     [JobStatus.Failed]: [],
@@ -109,7 +109,17 @@ export class ApprovalService {
       externalJobId: job.externalJobId,
       proposalText: job.aiAnalysis?.suggestedProposal ?? '',
       budget: job.aiAnalysis?.suggestedBudget ?? {},
+      clientBudget: job.budget,
+      clientTimeline: this.clientTimeline(job.clientInfo),
       timeline: job.aiAnalysis?.suggestedTimeline ?? undefined,
     });
+  }
+
+  private clientTimeline(clientInfo: unknown): string | undefined {
+    if (!clientInfo || typeof clientInfo !== 'object') return undefined;
+    const timeline = (clientInfo as Record<string, unknown>).timeline;
+    return typeof timeline === 'string' && timeline.trim()
+      ? timeline.trim()
+      : undefined;
   }
 }

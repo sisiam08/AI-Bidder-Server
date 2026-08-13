@@ -7,7 +7,6 @@ import {
   JobNotification,
   DeliveryReceipt,
   ApprovalCallback,
-  BlockedBidNotification,
 } from '../../common/interfaces/job.interface';
 
 const CURRENCY_SYMBOLS: Record<string, string> = {
@@ -99,6 +98,41 @@ export class TelegramProvider implements NotificationProvider {
     return rows;
   }
 
+  buildBlockedStatusKeyboard(jobId: string, jobUrl?: string): object[][] {
+    const rows: object[][] = [];
+    if (jobUrl) {
+      rows.push([{ text: 'View Job', url: jobUrl }]);
+    }
+    rows.push([
+      {
+        text: '🚫 Not Applicable',
+        callback_data: `noop:${jobId}`,
+      },
+    ]);
+    return rows;
+  }
+
+  buildApprovedLabel(payload: {
+    suggestedBudget?: { amount: number; currency?: string } | null;
+    suggestedTimeline?: string | null;
+  }): string {
+    const parts: string[] = [];
+    const budget = payload.suggestedBudget;
+    if (
+      budget &&
+      typeof budget.amount === 'number' &&
+      Number.isFinite(budget.amount)
+    ) {
+      parts.push(this.formatAmount(budget.amount, budget.currency));
+    }
+    const timeline = payload.suggestedTimeline;
+    if (timeline) {
+      const days = this.timelineToDays(timeline);
+      if (days !== null) parts.push(`${days} Days`);
+    }
+    return parts.length > 0 ? `Approved (${parts.join(', ')})` : 'Approved';
+  }
+
   async editMessageReplyMarkup(
     botToken: string,
     chatId: string | number,
@@ -143,62 +177,6 @@ export class TelegramProvider implements NotificationProvider {
       const error = await response.text();
       throw new Error(`answerCallbackQuery failed: ${error}`);
     }
-  }
-
-  async sendBlocked(
-    payload: BlockedBidNotification,
-    credentials: NotificationCredentials,
-  ): Promise<DeliveryReceipt> {
-    if (!credentials.botToken || !credentials.chatId) {
-      return {
-        success: false,
-        error: 'Telegram not configured for user',
-        isConfigurationError: true,
-      };
-    }
-
-    const message = [
-      `🚫 Bid Blocked — ${this.escapeHtml(payload.platform)}`,
-      `Title: <b>${this.escapeHtml(payload.title)}</b>`,
-      '',
-      '<b>Restrictions:</b>',
-      ...payload.reasons.map(
-        (reason) => `• ${this.escapeHtml(reason)}`,
-      ),
-    ]
-      .filter((line): line is string => line !== null)
-      .join('\n');
-
-    const response = await fetch(
-      `https://api.telegram.org/bot${credentials.botToken}/sendMessage`,
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          chat_id: credentials.chatId,
-          text: message,
-          parse_mode: 'HTML',
-          reply_markup: {
-            inline_keyboard: payload.jobUrl
-              ? [[{ text: 'View Job', url: payload.jobUrl }] as object]
-              : [],
-          },
-        }),
-      },
-    );
-
-    if (!response.ok) {
-      const error = await response.text();
-      return { success: false, error };
-    }
-
-    const result = (await response.json()) as {
-      result?: { message_id?: number };
-    };
-    return {
-      success: true,
-      messageId: String(result.result?.message_id ?? ''),
-    };
   }
 
   buildProposalKeyboard(payload: {
@@ -371,14 +349,16 @@ export class TelegramProvider implements NotificationProvider {
     const proposedDays = payload.suggestedTimeline
       ? this.timelineToDaysLabel(payload.suggestedTimeline)
       : null;
+    const clientBudget = this.formatClientBudget(payload.budget);
+    const clientTimeline = payload.clientTimeline?.trim() || null;
 
     return [
       `🔔 New Job Match — ${payload.platform}`,
       `Title: ${payload.title}`,
+      clientBudget ? `Client Budget: ${clientBudget}` : null,
+      clientTimeline ? `Client Timeline: ${clientTimeline}` : null,
       proposedBudget ? `Proposed Budget: ${proposedBudget}` : null,
       proposedDays ? `Proposed Days: ${proposedDays}` : null,
-      '',
-      ...this.formatBudget(payload.budget),
       '',
       'Summary:',
       payload.aiSummary,
@@ -392,18 +372,36 @@ export class TelegramProvider implements NotificationProvider {
       .join('\n');
   }
 
+  private formatClientBudget(
+    budget: JobNotification['budget'],
+  ): string | null {
+    const min = budget?.min;
+    const max = budget?.max;
+    const typeLabel =
+      budget?.type === 'hourly'
+        ? 'Hourly'
+        : budget?.type === 'fixed'
+          ? 'Fixed'
+          : '';
+    let range: string;
+    if (min !== undefined && max !== undefined) {
+      range = `${this.formatAmount(min, budget?.currency)}–${this.formatAmount(
+        max,
+        budget?.currency,
+      )}`;
+    } else if (max !== undefined) {
+      range = `up to ${this.formatAmount(max, budget?.currency)}`;
+    } else if (min !== undefined) {
+      range = `from ${this.formatAmount(min, budget?.currency)}`;
+    } else {
+      return null;
+    }
+    return typeLabel ? `${range} (${typeLabel})` : range;
+  }
+
   private formatAmount(amount: number, currency?: string): string {
     const symbol = CURRENCY_SYMBOLS[currency?.toUpperCase() ?? ''];
     return symbol ? `${symbol}${amount}` : `${amount} ${currency ?? ''}`.trim();
-  }
-
-  private escapeHtml(value: string): string {
-    return value
-      .replace(/&/g, '&amp;')
-      .replace(/</g, '&lt;')
-      .replace(/>/g, '&gt;')
-      .replace(/"/g, '&quot;')
-      .replace(/'/g, '&#39;');
   }
 
   private timelineToDays(timeline: string): number | null {
@@ -427,35 +425,5 @@ export class TelegramProvider implements NotificationProvider {
     const days = this.timelineToDays(timeline);
     if (days === null) return null;
     return `${days} Day${days === 1 ? '' : 's'}`;
-  }
-
-  private formatBudget(budget: JobNotification['budget']): (string | null)[] {
-    const min = budget?.min;
-    const max = budget?.max;
-    let range: string;
-    if (min !== undefined && max !== undefined) {
-      range = `${min}-${max}`;
-    } else if (min !== undefined) {
-      range = String(min);
-    } else if (max !== undefined) {
-      range = String(max);
-    } else {
-      range = '';
-    }
-
-    const type =
-      budget?.type === 'fixed'
-        ? 'Fixed'
-        : budget?.type === 'hourly'
-          ? 'Hourly'
-          : budget?.type
-            ? String(budget.type)
-            : '';
-
-    return [
-      range ? `Budget: ${range}` : null,
-      type ? `Type: ${type}` : null,
-      budget?.currency ? `Currency: ${budget.currency}` : null,
-    ];
   }
 }

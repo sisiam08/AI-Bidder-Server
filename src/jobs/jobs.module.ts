@@ -5,6 +5,7 @@ import { AuthModule } from '../auth/auth.module';
 import { PipelineModule } from '../pipeline/pipeline.module';
 import { WebsocketModule } from '../websocket/websocket.module';
 import { NotificationsModule } from '../notifications/notifications.module';
+import { ApprovalModule } from '../approval/approval.module';
 
 @Module({
   imports: [
@@ -12,6 +13,7 @@ import { NotificationsModule } from '../notifications/notifications.module';
     PipelineModule,
     WebsocketModule,
     NotificationsModule,
+    ApprovalModule,
   ],
   controllers: [JobsController],
   providers: [JobsService],

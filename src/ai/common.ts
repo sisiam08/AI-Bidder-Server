@@ -3,11 +3,32 @@ import {
   JobAnalysisOutput,
 } from '../common/interfaces/job.interface';
 
+function formatClientBudget(budget: JobAnalysisInput['budget']): string {
+  const type =
+    budget?.type === 'hourly'
+      ? 'hourly'
+      : budget?.type === 'fixed'
+        ? 'fixed'
+        : 'not stated';
+  let range: string;
+  if (budget?.min !== undefined && budget?.max !== undefined) {
+    range = `${budget.min} - ${budget.max}`;
+  } else if (budget?.min !== undefined) {
+    range = `from ${budget.min}`;
+  } else if (budget?.max !== undefined) {
+    range = `up to ${budget.max}`;
+  } else {
+    range = 'not stated';
+  }
+  const currency = budget?.currency ? budget.currency : '';
+  return `${type} ${currency} ${range}`.trim();
+}
+
 function inputContext(input: JobAnalysisInput): string {
   return [
     `Title: ${input.title}`,
     `Description: ${input.description}`,
-    `Budget: ${JSON.stringify(input.budget)}`,
+    `Client Budget: ${formatClientBudget(input.budget)}`,
     `Skills: ${input.skills.join(', ')}`,
     `Client Rating: ${input.clientInfo?.rating ?? 'n/a'}`,
     `Client Total Spent: ${input.clientInfo?.totalSpent ?? 'n/a'}`,
@@ -23,8 +44,10 @@ Read the job details below and produce a complete, actionable analysis to help a
 ## ANALYSIS RULES
 - Base every judgment strictly on what's stated or reasonably implied in the job details. Do not invent client details or requirements that aren't there.
 - requiredSkills: list only skills the posting actually implies (technical + soft skills like "clear communication" or "available for calls" if stated). Use the provided Skills list as a starting point, but add any skill clearly implied by the Description that isn't already listed.
-- suggestedBudget: the Budget field reflects the client's stated range/type (fixed or hourly) — anchor close to it unless the Description's actual scope clearly under- or over-shoots what that budget could reasonably cover. If Budget is missing or empty, estimate from comparable project scope.
-- suggestedTimeline: give a realistic delivery estimate based on the scope described in the Description, not a generic default.
+- suggestedBudget: this exact amount is auto-filled into the bid form, so it MUST be a bid the platform will accept as-is.
+  - NEVER exceed the client's stated maximum budget. If the client gave a range, choose a competitive amount INSIDE that range. If only a single number is stated, stay at or below it (slightly below is fine, above is not). If the client budget is missing entirely, estimate from comparable real-world market rates for that exact scope and skill set.
+  - Round the amount to a clean whole number (no awkward decimals like 149.99).
+- suggestedTimeline: this becomes the committed delivery time auto-filled into the bid form, in real calendar days. If the Description states an expected deadline, duration, or timeframe, propose a timeline AT or BELOW that deadline. Otherwise base it strictly on the scope described.
 - questions: only include questions genuinely necessary to scope the work correctly (missing specs, unclear integrations, ambiguous deliverables). Max 4. If the posting is fully clear, return an empty array.
 - portfolioLink: only if the Description explicitly asks to see past work, samples, or a portfolio. In that case, describe which specific type of past project would be most relevant to reference (by category/skill match). Otherwise return null.
 - Use Client Rating and Client Total Spent to calibrate risk and tone, but never mention these numbers directly in the proposal:
@@ -84,6 +107,29 @@ export function parseAnalysisResponse(response: string): JobAnalysisOutput {
 
 function clamp(value: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, value));
+}
+
+/** Guard: never emit a proposed bid above the client's stated budget ceiling. */
+export function clampSuggestedBudget(
+  output: JobAnalysisOutput,
+  clientBudget?: JobAnalysisInput['budget'],
+): JobAnalysisOutput {
+  const max = clientBudget?.max;
+  const amount = output.suggestedBudget?.amount;
+  if (
+    typeof max === 'number' &&
+    Number.isFinite(max) &&
+    max > 0 &&
+    typeof amount === 'number' &&
+    Number.isFinite(amount) &&
+    amount > max
+  ) {
+    output.suggestedBudget = {
+      ...output.suggestedBudget,
+      amount: Math.round(max * 100) / 100,
+    };
+  }
+  return output;
 }
 
 function asNumber(value: unknown): number {
