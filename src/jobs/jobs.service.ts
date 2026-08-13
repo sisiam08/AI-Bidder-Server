@@ -217,10 +217,12 @@ export class JobsService {
         const id = externalJobId.match(/~([a-f0-9]+)/)?.[1] ?? externalJobId;
         return `https://www.upwork.com/jobs/${id}`;
       }
-      case 'freelancer':
-        return externalJobId.startsWith('/')
-          ? `https://www.freelancer.com${externalJobId}`
-          : `https://www.freelancer.com/projects/${externalJobId}`;
+      case 'freelancer': {
+        const clean = externalJobId.split('?')[0].split('#')[0].replace(/\/+$/, '');
+        const m = clean.match(/^\/projects\/(.+)$/);
+        const slug = (m ? m[1] : clean).replace(/^\/+/, '').replace(/\/(details|bid)$/i, '');
+        return `https://www.freelancer.com/projects/${slug}/details`;
+      }
       default:
         return '';
     }
